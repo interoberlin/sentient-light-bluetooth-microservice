@@ -2,11 +2,10 @@ package de.interoberlin;
 
 import tinyb.*;
 import java.util.*;
-import java.time.*;
 import java.util.concurrent.locks.*;
 import java.util.concurrent.TimeUnit;
 
-public class AsyncTinyB {
+public class HelloTinyB {
     private static final float SCALE_LSB = 0.03125f;
     static boolean running = true;
 
@@ -19,6 +18,73 @@ public class AsyncTinyB {
 
     static float convertCelsius(int raw) {
         return raw / 128f;
+    }
+
+    /*
+     * After discovery is started, new devices will be detected. We can get a list of all devices through the manager's
+     * getDevices method. We can the look through the list of devices to find the device with the MAC which we provided
+     * as a parameter. We continue looking until we find it, or we try 15 times (1 minutes).
+     */
+    static BluetoothDevice getDevice(String address) throws InterruptedException {
+        BluetoothManager manager = BluetoothManager.getBluetoothManager();
+        BluetoothDevice sensor = null;
+        for (int i = 0; (i < 15) && running; ++i) {
+            List<BluetoothDevice> list = manager.getDevices();
+            if (list == null)
+                return null;
+
+            for (BluetoothDevice device : list) {
+                printDevice(device);
+                /*
+                 * Here we check if the address matches.
+                 */
+                if (device.getAddress().equals(address))
+                    sensor = device;
+            }
+
+            if (sensor != null) {
+                return sensor;
+            }
+            Thread.sleep(4000);
+        }
+        return null;
+    }
+
+    /*
+     * Our device should expose a temperature service, which has a UUID we can find out from the data sheet. The service
+     * description of the SensorTag can be found here:
+     * http://processors.wiki.ti.com/images/a/a8/BLE_SensorTag_GATT_Server.pdf. The service we are looking for has the
+     * short UUID AA00 which we insert into the TI Base UUID: f000XXXX-0451-4000-b000-000000000000
+     */
+    static BluetoothGattService getService(BluetoothDevice device, String UUID) throws InterruptedException {
+        System.out.println("Services exposed by device:");
+        BluetoothGattService tempService = null;
+        List<BluetoothGattService> bluetoothServices = null;
+        do {
+            bluetoothServices = device.getServices();
+            if (bluetoothServices == null)
+                return null;
+
+            for (BluetoothGattService service : bluetoothServices) {
+                System.out.println("UUID: " + service.getUUID());
+                if (service.getUUID().equals(UUID))
+                    tempService = service;
+            }
+            Thread.sleep(4000);
+        } while (bluetoothServices.isEmpty() && running);
+        return tempService;
+    }
+
+    static BluetoothGattCharacteristic getCharacteristic(BluetoothGattService service, String UUID) {
+        List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
+        if (characteristics == null)
+            return null;
+
+        for (BluetoothGattCharacteristic characteristic : characteristics) {
+            if (characteristic.getUUID().equals(UUID))
+                return characteristic;
+        }
+        return null;
     }
 
     /*
@@ -51,12 +117,7 @@ public class AsyncTinyB {
         boolean discoveryStarted = manager.startDiscovery();
 
         System.out.println("The discovery started: " + (discoveryStarted ? "true" : "false"));
-
-        /*
-         * After discovery is started, new devices will be detected. We can find the device we are interested in
-         * through the manager's find method.
-         */
-        BluetoothDevice sensor = manager.find(null, args[0], null, Duration.ofSeconds(10));
+        BluetoothDevice sensor = getDevice(args[0]);
 
         /*
          * After we find the device we can stop looking for other devices.
@@ -64,7 +125,7 @@ public class AsyncTinyB {
         try {
             manager.stopDiscovery();
         } catch (BluetoothException e) {
-            System.err.println("Discovery could not be stopped right now");
+            System.err.println("Discovery could not be stopped.");
         }
 
         if (sensor == null) {
@@ -82,8 +143,8 @@ public class AsyncTinyB {
             System.exit(-1);
         }
 
-        Lock lock = new ReentrantLock();
-        Condition cv = lock.newCondition();
+        final Lock lock = new ReentrantLock();
+        final Condition cv = lock.newCondition();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
@@ -94,16 +155,12 @@ public class AsyncTinyB {
                 } finally {
                     lock.unlock();
                 }
+
             }
         });
 
-        /*
-         * Our device should expose a temperature service, which has a UUID we can find out from the data sheet. The service
-         * description of the SensorTag can be found here:
-         * http://processors.wiki.ti.com/images/a/a8/BLE_SensorTag_GATT_Server.pdf. The service we are looking for has the
-         * short UUID AA00 which we insert into the TI Base UUID: f000XXXX-0451-4000-b000-000000000000
-         */
-        BluetoothGattService tempService = sensor.find( "f000aa00-0451-4000-b000-000000000000");
+
+        BluetoothGattService tempService = getService(sensor, "f000aa00-0451-4000-b000-000000000000");
 
         if (tempService == null) {
             System.err.println("This device does not have the temperature service we are looking for.");
@@ -112,9 +169,9 @@ public class AsyncTinyB {
         }
         System.out.println("Found service " + tempService.getUUID());
 
-        BluetoothGattCharacteristic tempValue = tempService.find("f000aa01-0451-4000-b000-000000000000");
-        BluetoothGattCharacteristic tempConfig = tempService.find("f000aa02-0451-4000-b000-000000000000");
-        BluetoothGattCharacteristic tempPeriod = tempService.find("f000aa03-0451-4000-b000-000000000000");
+        BluetoothGattCharacteristic tempValue = getCharacteristic(tempService, "f000aa01-0451-4000-b000-000000000000");
+        BluetoothGattCharacteristic tempConfig = getCharacteristic(tempService, "f000aa02-0451-4000-b000-000000000000");
+        BluetoothGattCharacteristic tempPeriod = getCharacteristic(tempService, "f000aa03-0451-4000-b000-000000000000");
 
         if (tempValue == null || tempConfig == null || tempPeriod == null) {
             System.err.println("Could not find the correct characteristics.");

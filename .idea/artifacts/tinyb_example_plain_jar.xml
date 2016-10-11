@@ -3,7 +3,6 @@
     <output-path>$PROJECT_DIR$/out/artifacts/tinyb_example_plain_jar</output-path>
     <root id="archive" name="tinyb-example-plain.jar">
       <element id="module-output" name="tinyb-example-plain" />
-      <element id="extracted-dir" path="$PROJECT_DIR$/lib/tinyb.jar" path-in-jar="/" />
     </root>
   </artifact>
 </component>
