@@ -1,5 +1,5 @@
 <component name="ArtifactManager">
-  <artifact type="jar" name="tinyb-example-plain:jar">
+  <artifact type="jar" build-on-make="true" name="tinyb-example-plain:jar">
     <output-path>$PROJECT_DIR$/out/artifacts/tinyb_example_plain_jar</output-path>
     <root id="archive" name="tinyb-example-plain.jar">
       <element id="module-output" name="tinyb-example-plain" />
