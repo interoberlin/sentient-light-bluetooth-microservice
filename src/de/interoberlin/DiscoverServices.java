@@ -12,7 +12,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class DiscoverServices {
-    private static final int SCAN_DURATION = 5;
+    private static final int SCAN_DURATION = 3;
 
     public static final String ANSI_RESET = "\u001B[0m";
     public static final String ANSI_BLACK = "\u001B[30m";
@@ -45,7 +45,10 @@ public class DiscoverServices {
         device = selectDevice(devices);
 
         connectDevice(device);
-        showDevices(devices);
+
+        boolean discoveryStarted = manager.startDiscovery();
+        System.out.println("The discovery " + (discoveryStarted ? "started." : "did not start!"));
+        Thread.sleep(500);
 
         Lock lock = new ReentrantLock();
         Condition cv = lock.newCondition();
