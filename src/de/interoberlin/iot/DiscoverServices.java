@@ -1,5 +1,5 @@
 
-package de.interoberlin;
+package de.interoberlin.iot;
 
 import tinyb.*;
 
